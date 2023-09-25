@@ -24,4 +24,5 @@ ENV INSTANCE_HASH=abc123
 
 EXPOSE ${PORT}
 
-ENTRYPOINT ["python", "main.py"]
+#ENTRYPOINT ["python", "main.py"]
+ENTRYPOINT ["sh", "run.sh"]
