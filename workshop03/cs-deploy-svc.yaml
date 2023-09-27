@@ -1,0 +1,84 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cs-deploy
+  namespace: csns
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: cs
+      name: cs-po
+  template:
+    metadata:
+      name: cs-po
+      namespace: csns
+      labels:
+        app: cs
+        name: cs-po
+    spec:
+      volumes:
+      - name: cs-vol
+        persistentVolumeClaim:
+          claimName: cs-pvc
+      containers:
+      - name: cs-container
+        image: linuxserver/code-server:amd64-4.17.0
+        imagePullPolicy: IfNotPresent
+        envFrom:
+        - configMapRef:
+            name: cs-cm
+        - secretRef:
+            name: cs-secret
+        ports:
+        #EXPOSE
+        - containerPort: 8443
+        volumeMounts:
+        - name: cs-vol
+          mountPath: /config/workspace
+
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: cs-svc
+  namespace: csns
+spec:
+  #type is either "NodePort/ClusterIP"
+  type: ClusterIP
+  selector:
+    app: cs
+    name: cs-po
+  ports:
+  #service port :
+  - port: 8443
+    targetPort: 8443
+
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: cs-ing
+  namespace: csns
+  labels:
+    app: cs
+    name: cs-ing
+#  annotations:
+#    nginx.ingress.kubernetes.io/limit-connections: "1"
+spec:
+  ingressClassName: nginx
+  rules:
+  # this is taken from external-ip of "ingress-ingress-nginx-controller"
+  # code-<external-ip>.nip.io    
+  - host: code-144.126.241.40.nip.io
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: cs-svc
+            port:
+              number: 8443

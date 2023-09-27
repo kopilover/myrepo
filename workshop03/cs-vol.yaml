@@ -1,0 +1,17 @@
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: cs-pvc
+  namespace: csns
+  labels:
+    app: cs
+    name: cs-pvc
+spec:
+  accessModes:
+  #can change to ReadWriteMany (will likely fail)/ ReadWriteOnce
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+  storageClassName: do-block-storage

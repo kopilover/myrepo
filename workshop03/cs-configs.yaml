@@ -1,0 +1,24 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cs-cm
+  namespace: csns
+data:
+  TZ: Asia/Singapore
+  DEFAULT_WORKSPACE: /config/workspace
+  # this is taken from external-ip of "ingress-ingress-nginx-controller"
+  # code-<external-ip>.nip.io
+  PROXY_DOMAIN: code-144.126.241.40.nip.io
+
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: cs-secret
+  namespace: csns
+type: Opaque
+data:
+  #base64 to encode it
+  PASSWORD: cGFzc3dvcmQ=
+  SUDO_PASSWORD: cGFzc3dvcmQ=

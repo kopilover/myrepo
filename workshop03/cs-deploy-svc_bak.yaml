@@ -1,0 +1,85 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cs-deploy
+  namespace: csns
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: cs
+      name: cs-po
+  template:
+    #copy the whole pod template here
+    #no need to put namesapce, type as pod, api
+    metadata:
+      name: cs-po
+      namespace: csns
+      labels:
+        app: cs
+        name: cs-po
+    spec:
+      volumes:
+      - name: cs-vol
+        persistentVolumeClaim:
+          claimName: cs-pvc
+      containers:
+      - name: cs-container
+        image: lscr.io/linuxserver/code-server:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        #EXPOSE
+        - containerPort: 8443
+        envFrom:
+        - configMapRef:
+            name: cs-cm
+        - secretRef:
+            name: cs-secret
+        volumeMounts:
+        - name: cs-vol
+          #dst
+          mountPath: /opt/data
+
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: cs-svc
+  namespace: csns
+spec:
+  #change type to "NodePort/ClusterIP"
+  type: ClusterIP
+  selector:
+    app: cs
+    name: cs-po
+  ports:
+  #service port :
+  - port: 8443
+    targetPort: 8443
+
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: cs-ing
+  namespace: csns
+  labels:
+    app: cs
+    name: cs-ing
+#  annotations:
+#    nginx.ingress.kubernetes.io/limit-connections: "1"
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: code-144.126.241.40.nip.io
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: cs-svc
+            port:
+              number: 8443

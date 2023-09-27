@@ -1,0 +1,61 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bggapp-deploy
+  namespace: bggns
+  labels:
+    app: bgg
+    tier: web
+    name: bggapp-deploy
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: bgg
+      tier: web
+      name: bggapp-po
+  template:
+    metadata:
+      name: bggapp-po
+      labels:
+        app: bgg
+        tier: web
+        name: bggapp-po
+    spec:
+      containers:
+      - name: bggapp-container
+        image: stackupiss/bgg-backend:v1
+        imagePullPolicy: IfNotPresent
+        envFrom:
+        - configMapRef:
+            name: bgg-cm
+        - secretRef:
+            name: bgg-secret
+        ports:
+        - containerPort: 3000
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 3000
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: bggapp-svc
+  namespace: bggns
+  labels :
+    app: bgg
+    tier: web
+    name: bggapp-svc
+spec:
+  #change to LoadBalancer
+  type: NodePort
+  selector:
+    app: bgg
+    tier: web
+    name: bggapp-po
+  ports:
+  - port: 8080
+    targetPort: 3000
