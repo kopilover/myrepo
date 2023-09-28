@@ -1,0 +1,188 @@
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: minns
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: min-cm
+  namespace: minns
+data:
+  MINIO_ROOT_USER: test1234
+
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: min-secret
+  namespace: minns
+type: Opaque
+data:
+  #base64 to encode it
+  MINIO_ROOT_PASSWORD: dGVzdDEyMzQ=
+---
+#create headless service
+apiVersion: v1
+kind: Service
+metadata:
+  name: min-hsvc
+  namespace: minns
+  labels:
+    app: min
+    name: min-hsvc
+spec:
+  clusterIP: None
+  selector:
+    app: min
+    name: min-po
+  ports:
+  - name: data
+    port: 9000
+    targetPort: 9000
+  - name: console
+    port: 9090
+    targetPort: 9090
+
+---
+#create headful service for ingress
+apiVersion: v1
+kind: Service
+metadata:
+  name: min-svc
+  namespace: minns
+  labels:
+    app: min
+    name: min-svc
+spec:
+  #type is either "NodePort/ClusterIP"
+  type: ClusterIP
+  selector:
+    app: min
+    name: min-po
+  ports:
+  #service port :
+  - name: data
+    port: 9000
+    targetPort: 9000
+  - name: console
+    port: 9090
+    targetPort: 9090
+
+---
+#create the stateful set
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: min-sts
+  namespace: minns
+  labels:
+    app: min
+    name: min-sts
+spec:
+  replicas: 3
+  serviceName: min-hsvc
+  selector:
+    matchLabels:
+      app: min
+      name: min-po
+  volumeClaimTemplates:
+  - metadata:
+      name: data-vol
+    spec:
+      accessModes: [ ReadWriteOnce ]
+      storageClassName: do-block-storage
+      resources:
+        requests:
+          storage: 1Gi
+  template:
+    metadata:
+      name: min-po
+      labels:
+        app: min
+        name: min-po
+    spec:
+      initContainers:
+      - name: change-perms
+        image: busybox
+        imagePullPolicy: IfNotPresent
+        command:
+        - /bin/sh
+        - -c
+        - "chmod 777 /data"
+        volumeMounts:
+        - name: data-vol
+          mountPath: /data
+      containers:
+      - name: min-container
+        image: bitnami/minio:latest
+        imagePullPolicy: IfNotPresent
+        command:
+          - minio
+          - server
+          - --address=:9000
+          - --console-address=:9090
+          - http://min-sts-{0...2}.min-hsvc.minns.svc.cluster.local/data
+        envFrom:
+          - configMapRef:
+              name: min-cm
+          - secretRef:
+              name: min-secret
+        ports:
+          - name: data
+            containerPort: 9000
+          - name: console
+            containerPort: 9090
+        volumeMounts:
+        - name: data-vol
+          mountPath: /data
+        livenessProbe:
+          httpGet:
+            path: /minio/health/live
+            port: 9000
+          periodSeconds: 60
+        readinessProbe:
+          httpGet:
+            path: /minio/health/ready
+            port: 9000
+          periodSeconds: 60
+
+---
+#create ingress controller
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: min-ing
+  namespace: minns
+  labels:
+    app: min
+    name: min-ing
+#  annotations:
+#    nginx.ingress.kubernetes.io/limit-connections: "1"
+spec:
+  ingressClassName: nginx
+  rules:
+  # this is taken from external-ip of "ingress-ingress-nginx-controller"
+  # xxx-<external-ip>.nip.io
+  - host: data-144.126.241.40.nip.io
+    http:
+      paths:
+        - path: /
+          pathType: Prefix
+          backend:
+            service:
+              name: min-svc
+              port:
+                number: 9000
+  - host: console-144.126.241.40.nip.io
+    http:
+      paths:
+        - path: /
+          pathType: Prefix
+          backend:
+            service:
+              name: min-svc
+              port:
+                number: 9090
